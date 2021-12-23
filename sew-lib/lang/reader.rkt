@@ -71,10 +71,15 @@
             (syntax-parse (template reading-syntax? #/args ...) #/
               (rest-of-file:id preprocess:expr)
               #:with sentinel (datum->syntax #f sew-sentinel)
+            #/syntax-parse (template reading-syntax? #/rest ...) #/
+              (rest:non-directive ...)
             #/template reading-syntax?
               (module modname modlang #/#%module-begin
                 header ...
-                (8<-plan-from-here sentinel rest-of-file preprocess
+                (8<-plan-from-here
+                  #:private-interface:sew sentinel
+                  rest-of-file
+                  preprocess
                   rest ...)))])])))
 
 (define-values (-read -read-syntax -get-info)

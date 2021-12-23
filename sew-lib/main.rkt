@@ -21,7 +21,8 @@
 
 (require #/for-syntax racket/base)
 (require #/for-syntax #/only-in racket/match == match)
-(require #/for-syntax #/only-in syntax/parse attribute syntax-parse)
+(require #/for-syntax #/only-in syntax/parse
+  attribute expr id syntax-parse)
 
 (require #/for-syntax #/only-in sew/private sew-sentinel)
 
@@ -30,20 +31,17 @@
 
 
 (define-syntax (8<-plan-from-here stx)
-  (define (error-used-outside-lang)
-    (raise-syntax-error #f "use of a Sew directive outside of a `#lang sew` module" stx))
   (syntax-parse stx
     [
-      (_ sentinel . rest)
-      (match (syntax-e (attribute sentinel))
-        [
-          (== sew-sentinel)
-          (syntax-parse #'rest #/ (rest-of-file preprocess rest ...)
-            #'(begin
-                (define-syntax (8<-plan-from-here-helper stx)
-                  (with-syntax
-                    ([(rest-of-file (... ...)) #'(rest ...)])
-                    preprocess))
-                (8<-plan-from-here-helper)))]
-        [_ (error-used-outside-lang)])]
-    [_ (error-used-outside-lang)]))
+      (_ #:private-interface:sew sentinel rest-of-file preprocess
+        rest ...)
+      #:when (equal? sew-sentinel (syntax-e #/attribute sentinel))
+      #'(begin
+          (define-syntax (8<-plan-from-here-helper stx)
+            (with-syntax
+              ([(rest-of-file (... ...)) #'(rest ...)])
+              preprocess))
+          (8<-plan-from-here-helper))]
+    [_
+      (syntax-parse stx #/ (_ rest-of-file:id preprocess:expr)
+      #/raise-syntax-error #f "use of a Sew directive outside of a `#lang sew` module" stx)]))
