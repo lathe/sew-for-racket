@@ -27,7 +27,7 @@ Some other potential uses:
 
 * A module whose main attraction is a certain nested submodule.
 
-* A module which provides a quoted copy of its own source code.}
+* A module which provides a quoted copy of its own source code.
 
 * A module which compiles the same code in multiple ways, such as with different contract enforcement levels or different debugging features enabled.
 
