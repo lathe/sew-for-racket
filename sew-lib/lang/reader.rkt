@@ -69,7 +69,7 @@
           [
             [8<-plan-from-here args ...]
             (syntax-parse (template reading-syntax? #/args ...) #/
-              (rest-of-file:id preprocess:expr)
+              (rest-of-file-pattern:expr preprocess:expr)
               #:with sentinel (datum->syntax #f sew-sentinel)
             #/syntax-parse (template reading-syntax? #/rest ...) #/
               (rest:non-directive ...)
@@ -78,7 +78,7 @@
                 header ...
                 (8<-plan-from-here
                   #:private-interface:sew sentinel
-                  rest-of-file
+                  rest-of-file-pattern
                   preprocess
                   rest ...)))])])))
 

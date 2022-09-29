@@ -20,7 +20,7 @@
 
 (require (only-in sew 8<-plan-from-here))
 
-[8<-plan-from-here <>
+[8<-plan-from-here [<> ...]
   #'(begin
       (provide main)
 

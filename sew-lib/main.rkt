@@ -33,13 +33,13 @@
 (define-syntax (8<-plan-from-here stx)
   (syntax-parse stx
     [
-      (_ #:private-interface:sew sentinel rest-of-file preprocess
+      (_ #:private-interface:sew sentinel rest-of-file-pattern
+        preprocess
         rest ...)
       #:when (equal? sew-sentinel (syntax-e #/attribute sentinel))
       #'(begin
           (define-syntax (8<-plan-from-here-helper stx)
-            (with-syntax
-              ([(rest-of-file (... ...)) #'(rest ...)])
+            (syntax-parse #'(rest ...) #/ rest-of-file-pattern
               preprocess))
           (8<-plan-from-here-helper))]
     [_

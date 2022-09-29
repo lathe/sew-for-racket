@@ -28,26 +28,29 @@
 
 @title{Sew}
 
-@defmodulelang[sew]
+@defmodulelang[
+  @racketmodlink[sew/lang/reader]{sew}
+  #:module-path sew/lang/reader
+]
 
 Sew is a Racket language that makes it easy to add boilerplate that surrounds the rest of the file, without changing its indentation.
 
 @racketblock[
-  @#,racketmetafont{@hash-lang[] @racketmodname[sew] @racketmodname[racket/base]}
+  @#,racketmetafont{@hash-lang[] @racketmodlink[sew/lang/reader]{sew} @racketmodname[racket/base]}
   
-  (require (only-in @racketmodname[sew] 8<-plan-from-here))
-
-  [8<-plan-from-here _<>
+  (require (only-in @#,racketmodname[sew] 8<-plan-from-here))
+  
+  [8<-plan-from-here [_<> ...]
     #'(begin
         (provide _main)
 
         (define (_main)
           _<> ...))]
-
+  
   (displayln "Hello, world!")
 ]
 
-The expression directly after the @racket[[8<-plan-from-here _<>]] line is evaluated in phase 1, with @racket[_<>] bound as a template variable to the rest of the content of the file.
+The expression in the body of the @racket[8<-plan-from-here] form is evaluated in phase 1, with @racket[_<>] bound as a template variable to the rest of the content of the file.
 
 This can come in handy for maintaining the file as though it belongs to a certain tradition of writing modules, while it actually belongs to another. For instance, the module above can be written as though it's a script, but it's actually a module that provides a @racket[_main] function.
 
@@ -63,13 +66,15 @@ For now, @racket[8<-plan-from-here] is the only directive defined by Sew. We mig
 
 @section[#:tag "directives"]{Sew Directives}
 
-@defform[[8<-plan-from-here rest-of-file-id preprocess-expr]]{
-  This must be used at the top level of a module using @racket[@#,hash-lang[] @#,racketmodname[sew]]. It binds the rest of the forms in the module to the pattern variable @racket[#'(rest-of-file-id ...)] as it runs @racket[preprocess-expr] in the syntax phase. The result of that expression is then used as the replacement (expansion) of this form and all the rest of the forms in the file.
+@defmodule[sew]
+
+@defform[[8<-plan-from-here rest-of-file-pattern preprocess-expr]]{
+  This must be used at the top level of a module that uses @racket[@#,hash-lang[] @#,racketmodlink[sew/lang/reader]{sew}]. It parses the rest of the forms in the module according to the @racketmodname[syntax/parse] pattern @racket[rest-of-file-pattern] and executes @racket[preprocess-expr] in the syntax phase. The result of that expression is then used as the replacement (expansion) of this form and all the rest of the forms in the file.
   
   For instance, the usage site
   
   @racketblock[
-    [8<-plan-from-here _<>
+    [8<-plan-from-here [_<> ...]
       #'(begin
           (provide _main)
           

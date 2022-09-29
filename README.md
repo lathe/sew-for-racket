@@ -9,7 +9,7 @@ Sew is a Racket language that makes it easy to add boilerplate that surrounds th
 
 (require (only-in sew 8<-plan-from-here))
 
-[8<-plan-from-here <>
+[8<-plan-from-here [<> ...]
   #'(begin
       (provide main)
       
@@ -19,7 +19,7 @@ Sew is a Racket language that makes it easy to add boilerplate that surrounds th
 (displayln "Hello, world!")
 ```
 
-The expression directly after the `[8<-plan-from-here <>]` line is evaluated in phase 1, with `<>` bound as a template variable to the rest of the content of the file.
+The expression in the body of the `8<-plan-from-here` form is evaluated in phase 1, with `<>` bound as a template variable to the rest of the content of the file.
 
 This can come in handy for maintaining the file as though it belongs to a certain tradition of writing modules, while it actually belongs to another. For instance, the module above can be written as though it's a script, but it's actually a module that provides a `main` function.
 
