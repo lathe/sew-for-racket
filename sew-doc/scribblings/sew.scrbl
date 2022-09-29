@@ -54,7 +54,17 @@ The expression in the body of the @racket[8<-plan-from-here] form is evaluated i
 
 This can come in handy for maintaining the file as though it belongs to a certain tradition of writing modules, while it actually belongs to another. For instance, the module above can be written as though it's a script, but it's actually a module that provides a @racket[_main] function.
 
-In the Lathe project, we intend to use Sew to write a module once but compile it with multiple levels of contract enforcement.
+Some other potential uses:
+
+@itemlist[
+  @item{A module whose main attraction is a certain nested submodule.}
+  
+  @item{A module which provides a quoted copy of its own source code.}
+  
+  @item{A module which compiles the same code in multiple ways, such as with different contract enforcement levels or different debugging features enabled.}
+  
+  @item{A module which provides a macro that can be used to compile a new variant of the module that's compiled with a non-default configuration.}
+]
 
 For now, @racket[8<-plan-from-here] is the only directive defined by Sew. We might extend this in the future to allow files to be cut up into more than one piece before they're all sewn together. This may resemble literate programming techniques for assembling programs in terms of chunks.
 
