@@ -25,6 +25,8 @@
 (require #/only-in racket/bool false?)
 (require #/only-in racket/function conjoin disjoin)
 (require #/only-in racket/match match)
+(require #/only-in racket/port
+  make-input-port/read-to-peek read-bytes!-evt)
 (require #/only-in racket/promise delay/thread force)
 (require #/only-in syntax/module-reader
   make-meta-reader lang-reader-module-paths)
@@ -85,16 +87,35 @@
       [ _
         (error-directive src-replacer-stx
           "expected the file to begin with a source replacement directive, usually in the format of (8<-build-path src) where src is a relative path string to another file for this one to pretend to be reading from")]))
-  (define-values (new-in pipe)
+  (define in-name (object-name in))
+  (define-values (no-peek-new-in pipe)
     (make-pipe
       ; NOTE: We'd set the limit to 0 if we could.
       ; TODO: See if a higher limit is faster or something.
       #;limit
-      1
+      #f
       #;input-name
-      (object-name in)
+      in-name
       #;output-name
       'pipe))
+  (define new-in
+    (make-input-port/read-to-peek in-name
+      #;read-in
+      (lambda (bstr)
+        (define bytes-avail-result
+          (read-bytes-avail! bstr no-peek-new-in))
+        (if
+          (and
+            (number? bytes-avail-result)
+            (zero? bytes-avail-result))
+          (wrap-evt (port-progress-evt no-peek-new-in)
+            (lambda (progress-evt)
+              0))
+          bytes-avail-result))
+      #;fast-peek
+      #f
+      #;close
+      (lambda () (close-input-port in))))
   (port-count-lines! new-in)
   (define use-replacements-promise
     (delay/thread (use-replacements new-src new-in)))
@@ -115,16 +136,25 @@
                 (? (disjoin false? exact-positive-integer?) line)
                 (? (disjoin false? exact-nonnegative-integer?) col)
                 (? (disjoin false? exact-positive-integer?) pos))
+              
               ; We wait for the pipe backing `new-in` to be empty.
+              ;
+              ; NOTE: In order for the pipe to be able to empty out,
+              ; we use `make-input-port/read-to-peek` to gate access
+              ; to the pipe so that the pipe's buffer isn't being used
+              ; as storage for peeked-at data.
+              ;
+              ; TODO: What we want is to set the location *after*
+              ; whatever position `new-in` has peeked to. Test whether
+              ; this sets the location at the position it's read to
+              ; instead. If so, we might need another tactic here and
+              ; might not end up using `make-input-port/read-to-peek`
+              ; in the end.
+              ;
               (let loop ()
-                (unless (= 0 (pipe-content-length new-in))
-                  (sync (port-progress-evt new-in))
+                (unless (= 0 (pipe-content-length no-peek-new-in))
+                  (sync (port-progress-evt no-peek-new-in))
                   (loop)))
-              ; TODO: See if there are race conditions here. If
-              ; `new-in` is peeked from on the
-              ; `use-replacements-promise` thread, is it possible for
-              ; the pipe to be empty but `new-in` still to be behind
-              ; the position where we want to set the location?
               (set-port-next-location! new-in line col pos)
               (loop)]
             [ _
