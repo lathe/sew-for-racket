@@ -26,7 +26,7 @@
 (require #/only-in racket/function conjoin disjoin)
 (require #/only-in racket/match match)
 (require #/only-in racket/port
-  make-input-port/read-to-peek read-bytes!-evt)
+  copy-port eof-evt make-input-port/read-to-peek)
 (require #/only-in racket/promise delay/thread force)
 (require #/only-in syntax/module-reader
   make-meta-reader lang-reader-module-paths)
@@ -88,91 +88,115 @@
         (error-directive src-replacer-stx
           "expected the file to begin with a source replacement directive, usually in the format of (8<-build-path src) where src is a relative path string to another file for this one to pretend to be reading from")]))
   (define in-name (object-name in))
-  (define-values (no-peek-new-in pipe)
+  (define-values (piped-in main-pipe)
     (make-pipe
-      ; NOTE: We'd set the limit to 0 if we could.
-      ; TODO: See if a higher limit is faster or something.
       #;limit
       #f
       #;input-name
       in-name
       #;output-name
-      'pipe))
+      'main-pipe))
+  (port-count-lines! piped-in)
+  (define-values (start-line start-col start-pos)
+    (port-next-location in))
+  (set-port-next-location! piped-in start-line start-col start-pos)
+  (thread
+    (lambda ()
+      (copy-port in main-pipe)
+      (close-output-port main-pipe)))
+  (define-values (written-in written-pipe)
+    (make-pipe
+      #;limit
+      #f
+      #;input-name
+      in-name
+      #;output-name
+      'written-pipe))
+  (define (process-command command-stx)
+    (match (syntax->datum command-stx)
+      [ `[8<-set-port-next-location! . ,args]
+        (match args
+          [ (list
+              (? (disjoin false? exact-positive-integer?) line)
+              (? (disjoin false? exact-nonnegative-integer?) col)
+              (? (disjoin false? exact-positive-integer?) pos))
+            (displayln "blah1")
+            (set-port-next-location! new-in line col pos)]
+          [ _
+            (error-directive command-stx
+              "expected a 3-element argument list of line, column, and position")])]
+      [ `[8<-write-string . ,args]
+        (match args
+          [(list (? string? s)) (write-string s written-pipe)]
+          [ _
+            (error-directive command-stx
+              "expected a 1-element argument list of a string to write")])]
+      [ _
+        (error-directive command-stx
+          "expected a 8<-set-port-next-location! or 8<-write-string command")]))
   (define new-in
     (make-input-port/read-to-peek in-name
       #;read-in
       (lambda (bstr)
-        (define bytes-avail-result
-          (read-bytes-avail! bstr no-peek-new-in))
-        (if
-          (and
-            (number? bytes-avail-result)
-            (zero? bytes-avail-result))
-          (wrap-evt (port-progress-evt no-peek-new-in)
+        (define (zero)
+          (wrap-evt (choice-evt (port-progress-evt in) (eof-evt in))
             (lambda (progress-evt)
-              0))
-          bytes-avail-result))
+              0)))
+        (define read-written-result
+          (read-bytes-avail!* bstr written-in))
+        (if (not (zero? read-written-result))
+          read-written-result
+          
+          ; TODO: We search for occurrences of `#8<` here, and when we
+          ; do, we seem to have to process the whitespace before them
+          ; ourselves, or else newlines occurring before them get
+          ; added to the line numbers we set. This may be because
+          ; we're partway through a single peeked(?) whitespace token
+          ; when we set the location, and it may be that something
+          ; about the internals of Racket's regexp processing or of
+          ; `make-input-port/read-to-peek` is not in an
+          ; invariant-preserving state at that time. We should test
+          ; putting the directive at different places in a file and in
+          ; the middle of non-whitespace tokens.
+          ;
+          (match
+            (regexp-match-peek-positions-immediate
+              #px"\\s*#" piped-in 0 (bytes-length bstr))
+            [ (list (cons 0 _))
+              (match
+                (regexp-match-peek-positions-immediate
+                  #px"^(?:\\s*#8<()|(?!\\s*#8<))" piped-in)
+                [#f (zero)]
+                [(list _ #f) (read-bytes! bstr piped-in 0 1)]
+                [(list _ (cons _ n))
+                  (port-commit-peeked
+                    n
+                    (port-progress-evt piped-in)
+                    always-evt
+                    piped-in)
+                  (wrap-evt always-evt
+                    (lambda (always-evt)
+                      (process-command (read-syntax src piped-in))
+                      0))])]
+            [(list (cons n _)) (read-bytes! bstr piped-in 0 n)]
+            [ _
+              (match (read-bytes-avail!* bstr piped-in)
+                [0 (zero)]
+                [result result])])))
       #;fast-peek
       #f
       #;close
-      (lambda () (close-input-port in))))
+      (lambda ()
+        (close-input-port in)
+        (close-output-port written-pipe)
+        (close-input-port written-in)
+        (close-output-port main-pipe)
+        (close-input-port piped-in))))
   (port-count-lines! new-in)
-  (define use-replacements-promise
-    (delay/thread (use-replacements new-src new-in)))
-  (let loop ()
-    (when
-      (regexp-match-positions #px"#8<" in
-        #;start-pos
-        0
-        #;end-pos
-        #f
-        pipe)
-      (define command-stx (read-syntax src in))
-      (define command (syntax->datum command-stx))
-      (match command
-        [ `[8<-set-port-next-location! . ,args]
-          (match args
-            [ (list
-                (? (disjoin false? exact-positive-integer?) line)
-                (? (disjoin false? exact-nonnegative-integer?) col)
-                (? (disjoin false? exact-positive-integer?) pos))
-              
-              ; We wait for the pipe backing `new-in` to be empty.
-              ;
-              ; NOTE: In order for the pipe to be able to empty out,
-              ; we use `make-input-port/read-to-peek` to gate access
-              ; to the pipe so that the pipe's buffer isn't being used
-              ; as storage for peeked-at data.
-              ;
-              ; TODO: What we want is to set the location *after*
-              ; whatever position `new-in` has peeked to. Test whether
-              ; this sets the location at the position it's read to
-              ; instead. If so, we might need another tactic here and
-              ; might not end up using `make-input-port/read-to-peek`
-              ; in the end.
-              ;
-              (let loop ()
-                (unless (= 0 (pipe-content-length no-peek-new-in))
-                  (sync (port-progress-evt no-peek-new-in))
-                  (loop)))
-              (set-port-next-location! new-in line col pos)
-              (loop)]
-            [ _
-              (error-directive command-stx
-                "expected a 3-element argument list of line, column, and position")])]
-        [ `[8<-write-string . ,args]
-          (match args
-            [ (list (? string? s))
-              (write-string s pipe)
-              (loop)]
-            [ _
-              (error-directive command-stx
-                "expected a 1-element argument list of a string to write")])]
-        [ _
-          (error-directive command-stx
-            "expected a 8<-set-port-next-location! or 8<-write-string command")])))
-  (close-output-port pipe)
-  (force use-replacements-promise))
+  ; TODO: For some reason, running this on a different thread is
+  ; necessary for the `new-src` to be picked up by instances of
+  ; `(quote-srcloc)` in the code. Figure out why.
+  (force (delay/thread (use-replacements new-src new-in))))
 
 (define-values (-read -read-syntax -get-info)
   (make-meta-reader
