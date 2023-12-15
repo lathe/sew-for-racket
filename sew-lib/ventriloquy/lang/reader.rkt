@@ -120,7 +120,6 @@
               (? (disjoin false? exact-positive-integer?) line)
               (? (disjoin false? exact-nonnegative-integer?) col)
               (? (disjoin false? exact-positive-integer?) pos))
-            (displayln "blah1")
             (set-port-next-location! new-in line col pos)]
           [ _
             (error-directive command-stx
@@ -159,16 +158,20 @@
           ; putting the directive at different places in a file and in
           ; the middle of non-whitespace tokens.
           ;
+          ; NOTE: We use Racket's "\s" regexp notation here, which
+          ; matches space, tab, carriage return, newline, and form
+          ; feed.
+          ;
           (match
             (regexp-match-peek-positions-immediate
-              #px"\\s*#" piped-in 0 (bytes-length bstr))
+              #px"\\s|#" piped-in 0 (bytes-length bstr))
             [ (list (cons 0 _))
               (match
                 (regexp-match-peek-positions-immediate
                   #px"^(?:\\s*#8<()|(?!\\s*#8<))" piped-in)
                 [#f (zero)]
                 [(list _ #f) (read-bytes! bstr piped-in 0 1)]
-                [(list _ (cons _ n))
+                [ (list _ (cons _ n))
                   (port-commit-peeked
                     n
                     (port-progress-evt piped-in)
@@ -176,10 +179,33 @@
                     piped-in)
                   (wrap-evt always-evt
                     (lambda (always-evt)
-                      (process-command (read-syntax src piped-in))
+                      (define command (read-syntax src piped-in))
+                      
+                      ; We consume and discard any spaces or tabs
+                      ; following the command, as well as an optional
+                      ; newline. This way, if we preprocess a file to
+                      ; add a boilerplate `#lang` header, we can let
+                      ; the first line of the file begin at column
+                      ; zero for easier reading. The line diffs will
+                      ; be immaculate.
+                      ;
+                      ; TODO: Decide whether a form feed counts as a
+                      ; newline. Decide what to do with Unicode.
+                      ;
+                      (match
+                        (regexp-match-positions
+                          #px"^[\x20\t]*(?:\r\n?|\n|(?=\f)()|)" piped-in)
+                        [ (list _ (cons _ _))
+                          (define-values (line col pos)
+                            (port-next-location piped-in))
+                          (raise-read-error "expected an optional newline, but behavior with respect to a form feed is currently undecided"
+                            src line col pos 0)]
+                        [_ (void)])
+                      (sync always-evt)
+                      (process-command command)
                       0))])]
             [(list (cons n _)) (read-bytes! bstr piped-in 0 n)]
-            [ _
+            [ #f
               (match (read-bytes-avail!* bstr piped-in)
                 [0 (zero)]
                 [result result])])))

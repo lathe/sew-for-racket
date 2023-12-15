@@ -26,7 +26,7 @@
 
 (check-equal?
   doc
-  "Hello #(struct:srcloc \"sew codebase /tests/text-doc-sample.rkt\" 6 11 103 14)"
+  "Hello #(struct:srcloc \"sew codebase /tests/text-doc-sample.rkt\" 5 11 102 14)"
   "The result of `(quote-srcloc)` is affected by `8<-set-port-next-location!`.")
 
 ; TODO: Document Ventriloquy.
