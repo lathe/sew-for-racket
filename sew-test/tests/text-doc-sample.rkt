@@ -2,15 +2,15 @@
 
 ; sew/tests/text-doc-sample
 ;
-; An example of using `#reader sew/ventriloquy/lang/reader` to make a
-; module that can mostly be comprised of DSL code. In this case, the
-; DSL we're using is `#lang scribble/text`, and we use `#reader` so we
-; can specify a different way to expose that text, through an export
-; named `doc`, somewhat like what `#lang scribble/manual` does. Where
-; Ventriloquy shines here is that it lets this whole
-; `#lang racket/base` boilerplate prelude have no impact on the line
-; numbers associated with the rest of the file, which could be handy
-; if this boilerplate were inserted by a build process.
+; An example of using `#reader sew/built/lang/reader` to make a module
+; that can mostly be comprised of DSL code. In this case, the DSL
+; we're using is `#lang scribble/text`, and we use `#reader` so we can
+; specify a different way to expose that text, through an export named
+; `doc`, somewhat like what `#lang scribble/manual` does. Where
+; Sew Built shines here is that it lets this whole `#lang racket/base`
+; boilerplate prelude have no impact on the line numbers associated
+; with the rest of the file, which could be handy if this boilerplate
+; were inserted by a build process.
 
 ;   Copyright 2023 The Lathe Authors
 ;
@@ -45,9 +45,9 @@
           #f)))))
 
 
-#reader sew/ventriloquy/lang/reader scribble/text
-[8<-source "sew codebase /tests/text-doc-sample.rkt"]
-#8<[8<-set-port-next-location! 1 0 1]
+#reader sew/built/lang/reader scribble/text
+[#8<-source "sew codebase /tests/text-doc-sample.rkt"]
+[#8<-set-port-next-location! 1 0 1]
 
 @(require (only-in racket/format ~s))
 @(require (only-in syntax/location quote-srcloc))

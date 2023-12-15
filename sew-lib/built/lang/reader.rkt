@@ -1,6 +1,6 @@
 #lang parendown racket/base
 
-; sew/ventriloquy/lang/reader
+; sew/built/lang/reader
 ;
 ; A Racket meta-language for assembling a file that reports source
 ; locations in terms of another file in the codebase, so that people
@@ -26,7 +26,7 @@
 (require #/only-in racket/function conjoin disjoin)
 (require #/only-in racket/match match)
 (require #/only-in racket/port
-  copy-port eof-evt make-input-port/read-to-peek)
+  copy-port eof-evt input-port-append make-input-port/read-to-peek)
 (require #/only-in racket/promise delay/thread force)
 (require #/only-in syntax/module-reader
   make-meta-reader lang-reader-module-paths)
@@ -38,6 +38,47 @@
   [-read read]
   [-read-syntax read-syntax]
   [-get-info get-info])
+
+
+(define (read-sew-reader-directive-stx src in)
+  (parameterize
+    (
+      [ current-readtable
+        (make-readtable #f #\8 'dispatch-macro
+          (lambda (ch in src line col pos)
+            (define < (peek-char in))
+            (match (peek-char in)
+              [ #\<
+                (string->symbol
+                  (string-append "#8" (symbol->string (read in))))]
+              [ _
+                (define appended-in
+                  (input-port-append (open-input-string "#8") in))
+                (port-count-lines! appended-in)
+                (set-port-next-location! appended-in line col pos)
+                (parameterize
+                  ([current-readtable (make-readtable #f)])
+                  (read-syntax src appended-in))])))])
+    (read-syntax src in)))
+
+(define (skip-whitespace-to-next-line src in)
+  
+  ; We consume and discard any spaces or tabs following the command,
+  ; as well as an optional newline. This way, if we preprocess a file
+  ; to add a boilerplate `#lang` header, we can let the first line of
+  ; the file begin at column zero for easier reading. The line diffs
+  ; will be immaculate.
+  ;
+  ; TODO: Decide whether a form feed counts as a newline. Decide what
+  ; to do with Unicode.
+  ;
+  (match
+    (regexp-match-positions #px"^[\x20\t]*(?:\r\n?|\n|(?=\f)()|)" in)
+    [ (list _ (cons _ _))
+      (define-values (line col pos) (port-next-location in))
+      (raise-read-error "expected an optional newline following a Sew reader directive, but behavior with respect to a form feed is currently undecided"
+        src line col pos 0)]
+    [_ (void)]))
 
 
 (define (wrap-src-and-in who: src in use-replacements)
@@ -53,25 +94,26 @@
         (syntax-column directive-stx)
         (syntax-position directive-stx)
         (syntax-span directive-stx))))
-  (define src-replacer-stx (read-syntax src in))
+  (define src-replacer-stx
+    (read-sew-reader-directive-stx src in))
   (define src-replacer (syntax->datum src-replacer-stx))
   (define new-src
     (match src-replacer
-      [ `[8<-authentic-source . ,args]
+      [ `[|#8<-authentic-source| . ,args]
         (match args
           [ (list)
             src]
           [ _
             (error-directive src-replacer-stx
               "expected a 0-element argument list")])]
-      [ `[8<-source . ,args]
+      [ `[|#8<-source| . ,args]
         (match args
           [ (list new-src)
             new-src]
           [ _
             (error-directive src-replacer-stx
               "expected a 1-element argument list of a source value, usually a path string")])]
-      [ `[8<-build-path . ,args]
+      [ `[|#8<-build-path| . ,args]
         (match args
           [ (list (? (conjoin string? relative-path?) relative-path))
             (if (path? src)
@@ -86,7 +128,7 @@
               "expected a 1-element argument list of a relative path string")])]
       [ _
         (error-directive src-replacer-stx
-          "expected the file to begin with a source replacement directive, usually in the format of (8<-build-path src) where src is a relative path string to another file for this one to pretend to be reading from")]))
+          "expected the file to begin with a Sew source replacement directive, usually in the format of [#8<-build-path src] where src is a relative path string to another file for this one to pretend to be reading from")]))
   (define in-name (object-name in))
   (define-values (piped-in main-pipe)
     (make-pipe
@@ -114,7 +156,7 @@
       'written-pipe))
   (define (process-command command-stx)
     (match (syntax->datum command-stx)
-      [ `[8<-set-port-next-location! . ,args]
+      [ `[|#8<-set-port-next-location!| . ,args]
         (match args
           [ (list
               (? (disjoin false? exact-positive-integer?) line)
@@ -124,7 +166,7 @@
           [ _
             (error-directive command-stx
               "expected a 3-element argument list of line, column, and position")])]
-      [ `[8<-write-string . ,args]
+      [ `[|#8<-write-string| . ,args]
         (match args
           [(list (? string? s)) (write-string s written-pipe)]
           [ _
@@ -132,7 +174,7 @@
               "expected a 1-element argument list of a string to write")])]
       [ _
         (error-directive command-stx
-          "expected a 8<-set-port-next-location! or 8<-write-string command")]))
+          "expected a [#8<-set-port-next-location! ...] command or a [#8<-write-string ...] command")]))
   (define new-in
     (make-input-port/read-to-peek in-name
       #;read-in
@@ -164,14 +206,16 @@
           ;
           (match
             (regexp-match-peek-positions-immediate
-              #px"\\s|#" piped-in 0 (bytes-length bstr))
+              #px"\\s|[([{]" piped-in 0 (bytes-length bstr))
             [ (list (cons 0 _))
               (match
                 (regexp-match-peek-positions-immediate
-                  #px"^(?:\\s*#8<()|(?!\\s*#8<))" piped-in)
+                  #px"^(?:\\s*()[([{]#8<|(?!\\s*[([{]#8<))" piped-in)
                 [#f (zero)]
                 [(list _ #f) (read-bytes! bstr piped-in 0 1)]
                 [ (list _ (cons _ n))
+                  ; We consume and discard the preceding spaces, tabs,
+                  ; newlines, carriage returns, and form feeds.
                   (port-commit-peeked
                     n
                     (port-progress-evt piped-in)
@@ -179,30 +223,10 @@
                     piped-in)
                   (wrap-evt always-evt
                     (lambda (always-evt)
-                      (define command (read-syntax src piped-in))
-                      
-                      ; We consume and discard any spaces or tabs
-                      ; following the command, as well as an optional
-                      ; newline. This way, if we preprocess a file to
-                      ; add a boilerplate `#lang` header, we can let
-                      ; the first line of the file begin at column
-                      ; zero for easier reading. The line diffs will
-                      ; be immaculate.
-                      ;
-                      ; TODO: Decide whether a form feed counts as a
-                      ; newline. Decide what to do with Unicode.
-                      ;
-                      (match
-                        (regexp-match-positions
-                          #px"^[\x20\t]*(?:\r\n?|\n|(?=\f)()|)" piped-in)
-                        [ (list _ (cons _ _))
-                          (define-values (line col pos)
-                            (port-next-location piped-in))
-                          (raise-read-error "expected an optional newline, but behavior with respect to a form feed is currently undecided"
-                            src line col pos 0)]
-                        [_ (void)])
-                      (sync always-evt)
-                      (process-command command)
+                      (define command-stx
+                        (read-sew-reader-directive-stx src piped-in))
+                      (skip-whitespace-to-next-line src piped-in)
+                      (process-command command-stx)
                       0))])]
             [(list (cons n _)) (read-bytes! bstr piped-in 0 n)]
             [ #f
@@ -226,7 +250,7 @@
 
 (define-values (-read -read-syntax -get-info)
   (make-meta-reader
-    'sew/ventriloquy
+    'sew/built
     "language path"
     lang-reader-module-paths
     (lambda (-read)

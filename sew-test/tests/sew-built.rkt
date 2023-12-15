@@ -1,11 +1,11 @@
-#lang sew/ventriloquy racket
-;[8<-authentic-source]
-;[8<-source "sew codebase /tests/ventriloquy.rkt"]
-[8<-build-path "../../../src/tests/ventriloquy.quy"]
+#lang sew/built racket
+;[#-8<-authentic-source]
+;[#-8<-source "sew codebase /tests/sew-built.rkt"]
+[#8<-build-path "../../../src/tests/sew-built.txt"]
 
-; sew/tests/ventriloquy
+; sew/tests/built
 ;
-; A demo of the `seq/ventriloquy` language, which shows how to use
+; A demo of the `#lang sew/built` language, which shows how to use
 ; this language to produce errors with replaced source locations.
 
 ;   Copyright 2023 The Lathe Authors
@@ -36,17 +36,17 @@
 
 #;
 (define-syntax (cause-trouble stx)
-  #8<[8<-set-port-next-location! 122 0 23](raise-syntax-error 'cause-trouble "hello" stx))
+  [#8<-set-port-next-location! 122 0 23](raise-syntax-error 'cause-trouble "hello" stx))
 
 ; NOTE: To see the line number reporting for this one, use DrRacket or use
-; `racket -l errortrace -t sew-test/tests/ventriloquy.rkt`.
+; `racket -l errortrace -t sew-test/tests/sew-built.rkt`.
 #;
 (define (cause-trouble)
-  #8<[8<-set-port-next-location! 122 0 23](error "hello"))
+  [#8<-set-port-next-location! 122 0 23](error "hello"))
 
 ;#;
 (define (cause-trouble)
-  #8<[8<-set-port-next-location! 122 0 23](quote-srcloc))
+  [#8<-set-port-next-location! 122 0 23](quote-srcloc))
 
 (define (invite-trouble)
   (list "no trouble here" (cause-trouble)))
@@ -60,8 +60,8 @@
     [
       (list _
         (srcloc
-          (regexp #px"src/tests/ventriloquy\\.quy" src)
+          (regexp #px"src/tests/sew-built\\.txt" src)
           line col pos span))
       (list src line col pos)])
-  (list (list "src/tests/ventriloquy.quy") 122 0 23)
-  "The `8<-build-path` directive sets the source, and the `8<-set-port-next-location!` command sets the line, column, and position.")
+  (list (list "src/tests/sew-built.txt") 122 0 23)
+  "The `#8<-build-path` directive sets the source, and the `#8<-set-port-next-location!` command sets the line, column, and position.")
