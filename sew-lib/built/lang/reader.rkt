@@ -132,7 +132,7 @@
               "expected a 1-element argument list of a relative path string")])]
       [ _
         (error-directive src-replacer-stx
-          "expected the file to begin with a Sew source replacement directive, usually in the format of [#8<-build-path-source src] where src is a relative path string to another file for this one to pretend to be reading from")]))
+          "expected the file to begin with a Sew Built source replacement directive")]))
   (define in-name (object-name in))
   (define-values (piped-in main-pipe)
     (make-pipe
@@ -158,6 +158,7 @@
       in-name
       #;output-name
       'written-pipe))
+  (define should-anticipate-further-commands? #t)
   (define (process-command command-stx)
     (match (syntax->datum command-stx)
       [ `[|#8<-set-port-next-location!| . ,args]
@@ -176,9 +177,16 @@
           [ _
             (error-directive command-stx
               "expected a 1-element argument list of a string to write")])]
+      [ `[|#8<-disregard-further-commands| . ,args]
+        (match args
+          [ (list)
+            (set! should-anticipate-further-commands? #f)]
+          [ _
+            (error-directive command-stx
+              "expected a 0-element argument list")])]
       [ _
         (error-directive command-stx
-          "expected a [#8<-set-port-next-location! ...] command or a [#8<-write-string ...] command")]))
+          "expected a Sew Built mid-stream command")]))
   (define new-in
     (make-input-port/read-to-peek in-name
       #;read-in
@@ -189,54 +197,63 @@
               0)))
         (define read-written-result
           (read-bytes-avail!* bstr written-in))
-        (if (not (zero? read-written-result))
-          read-written-result
-          
-          ; TODO: We search for occurrences of `#8<` here, and when we
-          ; do, we seem to have to process the whitespace before them
-          ; ourselves, or else newlines occurring before them get
-          ; added to the line numbers we set. This may be because
-          ; we're partway through a single peeked(?) whitespace token
-          ; when we set the location, and it may be that something
-          ; about the internals of Racket's regexp processing or of
-          ; `make-input-port/read-to-peek` is not in an
-          ; invariant-preserving state at that time. We should test
-          ; putting the directive at different places in a file and in
-          ; the middle of non-whitespace tokens.
-          ;
-          ; NOTE: We use Racket's "\s" regexp notation here, which
-          ; matches space, tab, carriage return, newline, and form
-          ; feed.
-          ;
-          (match
-            (regexp-match-peek-positions-immediate
-              #px"\\s|[([{]" piped-in 0 (bytes-length bstr))
-            [ (list (cons 0 _))
-              (match
-                (regexp-match-peek-positions-immediate
-                  #px"^(?:\\s*()[([{]#8<|(?!\\s*[([{]#8<))" piped-in)
-                [#f (zero)]
-                [(list _ #f) (read-bytes! bstr piped-in 0 1)]
-                [ (list _ (cons _ n))
-                  ; We consume and discard the preceding spaces, tabs,
-                  ; newlines, carriage returns, and form feeds.
-                  (port-commit-peeked
-                    n
-                    (port-progress-evt piped-in)
-                    always-evt
+        (cond
+          [ (match read-written-result [0 #f] [_ #t])
+            read-written-result]
+          [ (not should-anticipate-further-commands?)
+            (match (read-bytes-avail!* bstr piped-in)
+              [0 (zero)]
+              [read-piped-result read-piped-result])]
+          [ else
+            
+            ; TODO: We search for occurrences of `#8<` here, and when
+            ; we do, we seem to have to process the whitespace before
+            ; them ourselves, or else newlines occurring before them
+            ; get added to the line numbers we set. This may be
+            ; because we're partway through a single peeked(?)
+            ; whitespace token when we set the location, and it may be
+            ; that something about the internals of Racket's regexp
+            ; processing or of `make-input-port/read-to-peek` is not
+            ; in an invariant-preserving state at that time. We should
+            ; test putting the directive at different places in a file
+            ; and in the middle of non-whitespace tokens.
+            ;
+            ; NOTE: We use Racket's "\s" regexp notation here, which
+            ; matches space, tab, carriage return, newline, and form
+            ; feed.
+            ;
+            (match
+              (regexp-match-peek-positions-immediate
+                #px"\\s|[([{]" piped-in 0 (bytes-length bstr))
+              [ (list (cons 0 _))
+                (match
+                  (regexp-match-peek-positions-immediate
+                    #px"^(?:\\s*()[([{]#8<|(?!\\s*[([{]#8<))"
                     piped-in)
-                  (wrap-evt always-evt
-                    (lambda (always-evt)
-                      (define command-stx
-                        (read-sew-reader-directive-stx src piped-in))
-                      (skip-whitespace-to-next-line src piped-in)
-                      (process-command command-stx)
-                      0))])]
-            [(list (cons n _)) (read-bytes! bstr piped-in 0 n)]
-            [ #f
-              (match (read-bytes-avail!* bstr piped-in)
-                [0 (zero)]
-                [result result])])))
+                  [#f (zero)]
+                  [(list _ #f) (read-bytes! bstr piped-in 0 1)]
+                  [ (list _ (cons _ n))
+                    ; We consume and discard the preceding spaces,
+                    ; tabs, newlines, carriage returns, and form
+                    ; feeds.
+                    (port-commit-peeked
+                      n
+                      (port-progress-evt piped-in)
+                      always-evt
+                      piped-in)
+                    (wrap-evt always-evt
+                      (lambda (always-evt)
+                        (define command-stx
+                          (read-sew-reader-directive-stx
+                            src piped-in))
+                        (skip-whitespace-to-next-line src piped-in)
+                        (process-command command-stx)
+                        0))])]
+              [(list (cons n _)) (read-bytes! bstr piped-in 0 n)]
+              [ #f
+                (match (read-bytes-avail!* bstr piped-in)
+                  [0 (zero)]
+                  [result result])])]))
       #;fast-peek
       #f
       #;close

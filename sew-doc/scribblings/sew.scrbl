@@ -189,6 +189,7 @@ Instead, we can generate code that uses @lang-sew-built[]:
   
   [@#,directiveref[|#8<-source|] "my-project codebase /src/my-fancy-hello-world.rkt"]
   [@#,directiveref[|#8<-set-port-next-location!|] 1 0 1]
+  [@#,directiveref[|#8<-disregard-further-commands|]]
   (my-fancy-displayln "Hello, world!")
 ]
 
@@ -205,21 +206,22 @@ Since @lang-sew[] can frontload other kinds of boilerplate in Racket programs, t
   [8<-plan-from-here [_<> ...]
     #'(begin
         (provide _main)
-
+        
         (define (_main)
           _<> ...))]
   
   [@#,directiveref[|#8<-set-port-next-location!|] 1 0 1]
+  [@#,directiveref[|#8<-disregard-further-commands|]]
   (displayln "Hello, world!")
 ]
 
-For now, @directiveref[|#8<-authentic-source|], @directiveref[|#8<-source|], @directiveref[|#8<-build-path-source|], @directiveref[|#8<-set-port-next-location!|], and @directiveref[|#8<-write-string|] are the only directives defined for use in @lang-sew-built[]. We might extend Sew Built in the future with more directives.
+For now, Sew Built defines a small number of source directives and mid-stream commands, and there's currently no way to extend this.
 
 In detail, a Sew Built module is read using the following process:
 
 First, a form is read using the default Racket reader extended so that @tt{#8<} can begin a symbol. This form is used as a directive to indicate the source of the module, and it must be a correct use of @directiveref[|#8<-authentic-source|], @directiveref[|#8<-authentic-source|], or @directiveref[|#8<-build-path-source|].
 
-Then, the rest of the module is read using the original @hash-lang[]'s reader but using a modified input port. This input port forwards along any text it finds until a space, tab, carriage return, newline, form feed, @tt{(}, @tt{[}, or @tt|{{}|. When it finds one of those, it waits until it can determine whether or not the input is in the form @tt{(#8<}, @tt{[#8<}, or @tt|{{#8<}| with any number of preceding spaces, tabs, newlines, carriage returns, or form feed characters. If the input is not in such a form, it's passed along as usual. If it is in that form, the input port reads a syntax object using the default Racket reader extended so that @tt{#8<} can begin a symbol. Then, it consumes and discards any number of spaces or tabs it finds, and if there is a carriage return, a newline, or a carriage return newline (CRLF) sequence, it consumes that as well. Then the syntax object it read this way is interpreted as a Sew Built mid-stream command, and it must be a correct use of @directiveref[|#8<-set-port-next-location!|] or @directiveref[|#8<-write-string|].
+Then, the rest of the module is read using the original @hash-lang[]'s reader but using a modified input port. This input port forwards along any text it finds until a space, tab, carriage return, newline, form feed, @tt{(}, @tt{[}, or @tt|{{}|. When it finds one of those, it waits until it can determine whether or not the input is in the form @tt{(#8<}, @tt{[#8<}, or @tt|{{#8<}| with any number of preceding spaces, tabs, newlines, carriage returns, or form feed characters. If the input is not in such a form, it's passed along as usual. If it is in that form, the input port reads a syntax object using the default Racket reader extended so that @tt{#8<} can begin a symbol. Then, it consumes and discards any number of spaces or tabs it finds, and if there is a carriage return, a newline, or a carriage return newline (CRLF) sequence, it consumes that as well. Then the syntax object it read this way is interpreted as a Sew Built mid-stream command, and it must be a correct use of @directiveref[|#8<-set-port-next-location!|], @directiveref[|#8<-write-string|], or @directiveref[|#8<-disregard-further-commands|].
 
 Note that since Sew Built mid-stream commands are recognized by the sequence of an opening bracket directly followed by @tt{#8<}, comments and whitespace cannot appear before the @tt{#8<}. This makes the syntax of mid-stream commands slightly different from the syntax of source directives. Both of these differ from Sew directives like @racket[[8<-plan-from-here _...]]. The resemblance between these three syntaxes is mainly for the sake of superficial visual cohesion of the Sew library as a whole, with the presence or absence of @tt{#} conveying that something out of the ordinary is going on at read time.
 
@@ -311,6 +313,20 @@ Note that since Sew Built mid-stream commands are recognized by the sequence of 
   Sets up the input stream to read @racket[input-string] next, as though using @racket[write-string] on an output port that feeds into the language reader's input port. The @racket[input-string] form must be a literal string.
   
   This can be used to escape instances of syntax that looks like the beginning of a Sew Built mid-stream command. In particular, it can be useful to use @racket[[@#,tt{#8<-write-string} "#"]] to escape instances of @tt{#} within @tt{#8<}, and it can also be used to escape whitespace sequences around other commands, since those would otherwise be discarded.
+  
+  @mid-stream-command-reminder[]
+}
+
+@elemtag['(sew-built-directive |#8<-disregard-further-commands|)]{}
+@defform[
+  #:kind "Sew Built mid-stream command"
+  #:link-target? #f
+  #:id [name (make-id '|#8<-disregard-further-commands|)]
+  [name]
+]{
+  Causes the rest of the input stream to be processed without detecting or executing any further Sew Built mid-stream commands.
+  
+  This is good for creating build processes that maintain the illusion that Sew Built was never used. Without it, maintainers who accidentally write something that looks like a Sew Build mid-stream command might find their build output failing or misbehaving.
   
   @mid-stream-command-reminder[]
 }

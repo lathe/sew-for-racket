@@ -48,6 +48,7 @@
 #reader sew/built/lang/reader scribble/text
 [#8<-source "sew codebase /tests/text-doc-sample.rkt"]
 [#8<-set-port-next-location! 1 0 1]
+[#8<-disregard-further-commands]
 
 @(require (only-in racket/format ~s))
 @(require (only-in syntax/location quote-srcloc))
