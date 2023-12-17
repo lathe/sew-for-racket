@@ -1,7 +1,7 @@
 #lang sew/built racket
 ;[#-8<-authentic-source]
 ;[#-8<-source "sew codebase /tests/sew-built.rkt"]
-[#8<-build-path "../../../src/tests/sew-built.txt"]
+[#8<-build-path-source "../../../src/tests/sew-built.txt"]
 
 ; sew/tests/built
 ;
@@ -64,4 +64,4 @@
           line col pos span))
       (list src line col pos)])
   (list (list "src/tests/sew-built.txt") 122 0 23)
-  "The `#8<-build-path` directive sets the source, and the `#8<-set-port-next-location!` command sets the line, column, and position.")
+  "The `#8<-build-path-source` directive sets the source, and the `#8<-set-port-next-location!` command sets the line, column, and position.")

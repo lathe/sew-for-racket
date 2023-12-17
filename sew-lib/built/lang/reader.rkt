@@ -23,7 +23,7 @@
 
 
 (require #/only-in racket/bool false?)
-(require #/only-in racket/function conjoin disjoin)
+(require #/only-in racket/function conjoin disjoin negate)
 (require #/only-in racket/match match)
 (require #/only-in racket/port
   copy-port eof-evt input-port-append make-input-port/read-to-peek)
@@ -113,22 +113,26 @@
           [ _
             (error-directive src-replacer-stx
               "expected a 1-element argument list of a source value, usually a path string")])]
-      [ `[|#8<-build-path| . ,args]
+      [ `[|#8<-build-path-source| . ,args]
         (match args
-          [ (list (? (conjoin string? relative-path?) relative-path))
-            (if (path? src)
-              (simplify-path (build-path src relative-path))
+          [
+            (list
+              (?
+                (conjoin string? path-string? (negate complete-path?))
+                subpath))
+            (if (or (path-string? src) (path-for-some-system? src))
+              (simplify-path (build-path src subpath))
               ; NOTE: If we ever find that the original source value
               ; isn't in the form of a path already, we just ignore
               ; its value and use the relative path as the source
               ; value directly.
-              relative-path)]
+              subpath)]
           [ _
             (error-directive src-replacer-stx
               "expected a 1-element argument list of a relative path string")])]
       [ _
         (error-directive src-replacer-stx
-          "expected the file to begin with a Sew source replacement directive, usually in the format of [#8<-build-path src] where src is a relative path string to another file for this one to pretend to be reading from")]))
+          "expected the file to begin with a Sew source replacement directive, usually in the format of [#8<-build-path-source src] where src is a relative path string to another file for this one to pretend to be reading from")]))
   (define in-name (object-name in))
   (define-values (piped-in main-pipe)
     (make-pipe

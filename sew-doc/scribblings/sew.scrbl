@@ -5,7 +5,7 @@
 @; A Racket meta-language for assembling a file with custom
 @; preprocessing logic.
 
-@;   Copyright 2021 The Lathe Authors
+@;   Copyright 2021-2023 The Lathe Authors
 @;
 @;   Licensed under the Apache License, Version 2.0 (the "License");
 @;   you may not use this file except in compliance with the License.
@@ -24,9 +24,10 @@
 
 
 @(require #/for-label #/only-in racket/base
-  ... begin define displayln exact-nonnegative-integer?
-  exact-positive-integer? only-in provide read-syntax require
-  set-port-next-location! write-string)
+  ... begin build-path complete-path? define displayln
+  exact-nonnegative-integer? exact-positive-integer? only-in
+  path-for-some-system? path-string? provide read-syntax require
+  set-port-next-location! simplify-path write-string)
 
 @(require #/for-label #/only-in sew 8<-plan-from-here)
 
@@ -212,11 +213,11 @@ Since @lang-sew[] can frontload other kinds of boilerplate in Racket programs, t
   (displayln "Hello, world!")
 ]
 
-For now, @directiveref[|#8<-authentic-source|], @directiveref[|#8<-source|], @directiveref[|#8<-build-path|], @directiveref[|#8<-set-port-next-location!|], and @directiveref[|#8<-write-string|] are the only directives defined for use in @lang-sew-built[]. We might extend Sew Built in the future with more directives.
+For now, @directiveref[|#8<-authentic-source|], @directiveref[|#8<-source|], @directiveref[|#8<-build-path-source|], @directiveref[|#8<-set-port-next-location!|], and @directiveref[|#8<-write-string|] are the only directives defined for use in @lang-sew-built[]. We might extend Sew Built in the future with more directives.
 
 In detail, a Sew Built module is read using the following process:
 
-First, a form is read using the default Racket reader extended so that @tt{#8<} can begin a symbol. This form is used as a directive to indicate the source of the module, and it must be a correct use of @directiveref[|#8<-authentic-source|], @directiveref[|#8<-authentic-source|], or @directiveref[|#8<-build-path|].
+First, a form is read using the default Racket reader extended so that @tt{#8<} can begin a symbol. This form is used as a directive to indicate the source of the module, and it must be a correct use of @directiveref[|#8<-authentic-source|], @directiveref[|#8<-authentic-source|], or @directiveref[|#8<-build-path-source|].
 
 Then, the rest of the module is read using the original @hash-lang[]'s reader but using a modified input port. This input port forwards along any text it finds until a space, tab, carriage return, newline, form feed, @tt{(}, @tt{[}, or @tt|{{}|. When it finds one of those, it waits until it can determine whether or not the input is in the form @tt{(#8<}, @tt{[#8<}, or @tt|{{#8<}| with any number of preceding spaces, tabs, newlines, carriage returns, or form feed characters. If the input is not in such a form, it's passed along as usual. If it is in that form, the input port reads a syntax object using the default Racket reader extended so that @tt{#8<} can begin a symbol. Then, it consumes and discards any number of spaces or tabs it finds, and if there is a carriage return, a newline, or a carriage return newline (CRLF) sequence, it consumes that as well. Then the syntax object it read this way is interpreted as a Sew Built mid-stream command, and it must be a correct use of @directiveref[|#8<-set-port-next-location!|] or @directiveref[|#8<-write-string|].
 
@@ -258,18 +259,18 @@ Note that since Sew Built mid-stream commands are recognized by the sequence of 
   @source-directive-reminder[]
 }
 
-@elemtag['(sew-built-directive |#8<-build-path|)]{}
+@elemtag['(sew-built-directive |#8<-build-path-source|)]{}
 @defform[
   #:kind "Sew Built source directive"
   #:link-target? #f
-  #:id [name (make-id '|#8<-build-path|)]
-  [name relative-path-string]
+  #:id [name (make-id '|#8<-build-path-source|)]
+  [name subpath-string]
 ]{
-  Specifies that the source of this module is a path, namely the path constructible using the given @racket[relative-path-string] based on the path this module would usually have as its source.
+  Specifies that the source of this module is a path, namely the path constructible with @racket[build-path] and @racket[simplify-path] using the given @racket[subpath-string] interpreted relative to the path this module would usually have as its source.
   
-  The @racket[relative-path-string] form must be a literal string, and it must satisfy @racket[relative-path?].
+  If the usual source the module would have is neither a @racket[path-string?] nor a @racket[path-for-some-system?], then the @racket[subpath-string] is just used as the source directly rather than resolving it.
   
-  To use this form, the usual source the module would have must be a @racket[path?].
+  The @racket[subpath-string] form must be a literal string, and it must satisfy @racket[path-string?] and yet not be a @racket[complete-path?].
   
   @source-directive-reminder[]
 }
