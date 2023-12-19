@@ -236,11 +236,12 @@
                     ; We consume and discard the preceding spaces,
                     ; tabs, newlines, carriage returns, and form
                     ; feeds.
-                    (port-commit-peeked
-                      n
-                      (port-progress-evt piped-in)
-                      always-evt
-                      piped-in)
+                    (unless (zero? n)
+                      (port-commit-peeked
+                        n
+                        (port-progress-evt piped-in)
+                        always-evt
+                        piped-in))
                     (wrap-evt always-evt
                       (lambda (always-evt)
                         (define command-stx
