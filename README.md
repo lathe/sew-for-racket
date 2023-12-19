@@ -63,7 +63,7 @@ And suppose we actually want it to behave as though it were written like this:
 (my-fancy-displayln "Hello, world!")
 ```
 
-A build script could simply insert the `#lang` and the `require` lines as it copies our source file to a distributable directory, but that may not be satisfactory. With such a simplistic build step, if the `my-fancy-displayln` call has an error, that error will be reported in terms of line 5 of the generated file, rather than line 1 of the file we actually need to modify.
+A build script could simply insert the `#lang` and `require` lines as it copies our source file to a distributable directory, but that may not be satisfactory. With such a simplistic build step, if the `my-fancy-displayln` call has an error, that error will be reported in terms of line 5 of the generated file, rather than line 1 of the file we actually need to modify.
 
 Instead, we can generate code that uses `#lang sew/built`:
 
