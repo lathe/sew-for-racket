@@ -4,6 +4,11 @@
 
 (define deps (list "base"))
 (define build-deps
-  (list "parendown-lib" "racket-doc" "scribble-lib" "sew-lib"))
+  (list
+    "lathe-comforts-doc"
+    "parendown-lib"
+    "racket-doc"
+    "scribble-lib"
+    "sew-lib"))
 
 (define scribblings (list (list "scribblings/sew.scrbl" (list))))

@@ -5,7 +5,7 @@
 @; A Racket meta-language for assembling a file with custom
 @; preprocessing logic.
 
-@;   Copyright 2021-2023 The Lathe Authors
+@;   Copyright 2021-2023, 2025 The Lathe Authors
 @;
 @;   Licensed under the Apache License, Version 2.0 (the "License");
 @;   you may not use this file except in compliance with the License.
@@ -31,6 +31,9 @@
 
 @(require #/for-label #/only-in sew 8<-plan-from-here)
 
+
+@(define lathe-comforts-doc
+  '(lib "lathe-comforts/scribblings/lathe-comforts.scrbl"))
 
 @(struct printable (rep)
    #:methods gen:custom-write
@@ -69,6 +72,11 @@
    @elemref[
     '(sew-built-directive directive-name)
    ]{@racketfont{@(symbol->string 'directive-name)}})
+
+@(define @enforces-autopticity[]
+  @list{
+    This syntax must be called with @tech[#:doc lathe-comforts-doc]{autopticity}. An occurrence of a cons cell, empty list, or keyword that's part of the call syntax must have a set of scopes that's equal to or a superset of the set of scopes on the entire call, as though the call has created a local binding of what a cons cell means in these positions. This helps ensure that even though Racket expressions are often made of cons cells, an expression inserted into one of these positions by a macro's syntax template will not have its cons cells misinterpreted.
+  })
 
 
 @title{Sew}
@@ -152,6 +160,8 @@ For now, @racket[8<-plan-from-here] is the only directive defined for use in @la
       (define (_main)
         (displayln "Hello, world!")))
   ]
+  
+  @enforces-autopticity[]
 }
 
 

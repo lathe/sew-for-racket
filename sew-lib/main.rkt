@@ -4,7 +4,7 @@
 ;
 ; Sew's preprocessing directives.
 
-;   Copyright 2021 The Lathe Authors
+;   Copyright 2021, 2022, 2025 The Lathe Authors
 ;
 ;   Licensed under the Apache License, Version 2.0 (the "License");
 ;   you may not use this file except in compliance with the License.
@@ -24,6 +24,9 @@
 (require #/for-syntax #/only-in syntax/parse
   attribute expr id syntax-parse)
 
+(require #/for-syntax #/only-in lathe-comforts/syntax
+  ~autoptic ~autoptic-list)
+
 (require #/for-syntax #/only-in sew/private sew-sentinel)
 
 
@@ -33,15 +36,21 @@
 (define-syntax (8<-plan-from-here stx)
   (syntax-parse stx
     [
-      (_ #:private-interface:sew sentinel rest-of-file-pattern
-        preprocess
-        rest ...)
-      #:when (equal? sew-sentinel (syntax-e #/attribute sentinel))
+      {~autoptic-list
+        (_ {~autoptic #:private-interface:sew} sentinel
+          rest-of-file-pattern
+          preprocess:expr
+          rest ...)}
+      
+      #:when
+      (equal-always? sew-sentinel (syntax-e #/attribute sentinel))
+      
       #'(begin
           (define-syntax (8<-plan-from-here-helper stx)
             (syntax-parse #'(rest ...) #/ rest-of-file-pattern
               preprocess))
           (8<-plan-from-here-helper))]
     [_
-      (syntax-parse stx #/ (_ rest-of-file:id preprocess:expr)
+      (syntax-parse stx #/
+        {~autoptic-list (_ rest-of-file-pattern preprocess:expr)}
       #/raise-syntax-error #f "use of a Sew directive outside of a `#lang sew` module" stx)]))

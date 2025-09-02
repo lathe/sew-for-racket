@@ -5,7 +5,7 @@
 ; A Racket meta-language for assembling a file with custom
 ; preprocessing logic.
 
-;   Copyright 2021 The Lathe Authors
+;   Copyright 2021, 2022 2025 The Lathe Authors
 ;
 ;   Licensed under the Apache License, Version 2.0 (the "License");
 ;   you may not use this file except in compliance with the License.
@@ -26,8 +26,10 @@
 (require #/only-in syntax/module-reader
   make-meta-reader lang-reader-module-paths)
 (require #/only-in syntax/parse
-  ~not attribute define-syntax-class expr id pattern syntax-parse)
-(require #/only-in syntax/parse/define define-syntax-parse-rule)
+  ~literal ~not ~var attribute define-syntax-class expr id pattern syntax-parse)
+
+(require #/only-in lathe-comforts define-syntax-parse-rule/autoptic)
+(require #/only-in lathe-comforts/syntax ~autoptic-to ~autoptic-list)
 
 (require #/only-in sew/private sew-sentinel)
 
@@ -38,11 +40,13 @@
   [-get-info get-info])
 
 
-(define-syntax-parse-rule (template is-syntax?:expr t)
+(define-syntax-parse-rule/autoptic (template is-syntax?:expr t)
   (if is-syntax? (syntax t) (datum t)))
 
-(define-syntax-class directive
-  (pattern (_:directive . _))
+(define-syntax-class (directive surrounding-stx)
+  (pattern
+    {~autoptic-to surrounding-stx
+      ({~var _ (directive surrounding-stx)} . _)})
   (pattern d:id #:when
     (let ()
       (define value-d (attribute d))
@@ -51,8 +55,8 @@
       (and (symbol-interned? unwrapped-d)
         (regexp-match? #px"^8<.*$" (symbol->string unwrapped-d))))))
 
-(define-syntax-class non-directive
-  (pattern {~not _:directive}))
+(define-syntax-class (non-directive surrounding-stx)
+  (pattern {~not #/~var _ (directive surrounding-stx)}))
 
 (define (wrap-reader reading-syntax? -read)
   (lambda args
@@ -60,27 +64,35 @@
     (syntax-parse orig
       [
         (module modname modlang #/#%module-begin
-          header:non-directive ...)
+          {~var header (non-directive orig)}
+          ...)
         orig]
       [
         (module modname modlang #/#%module-begin
-          header:non-directive ... first:directive rest ...)
-        (syntax-parse (template reading-syntax? first)
-          [
-            [8<-plan-from-here args ...]
-            (syntax-parse (template reading-syntax? #/args ...) #/
-              (rest-of-file-pattern:expr preprocess:expr)
-              #:with sentinel (datum->syntax #f sew-sentinel)
-            #/syntax-parse (template reading-syntax? #/rest ...) #/
-              (rest:non-directive ...)
-            #/template reading-syntax?
-              (module modname modlang #/#%module-begin
-                header ...
-                (8<-plan-from-here
-                  #:private-interface:sew sentinel
-                  rest-of-file-pattern
-                  preprocess
-                  rest ...)))])])))
+          {~var header (non-directive orig)}
+          ...
+          {~var first (directive orig)}
+          rest ...)
+        (define (finish)
+          (syntax-parse (template reading-syntax? first) #/
+            {~autoptic-list
+              [_ rest-of-file-pattern:expr preprocess:expr]}
+            #:with sentinel (datum->syntax #f sew-sentinel)
+          #/syntax-parse (template reading-syntax? #/rest ...) #/
+            ({~var rest (non-directive orig)} ...)
+          #/template reading-syntax?
+            (module modname modlang #/#%module-begin
+              header ...
+              [8<-plan-from-here #:private-interface:sew sentinel
+                rest-of-file-pattern
+                preprocess
+                rest ...])))
+        (if reading-syntax?
+          (syntax-parse #'first
+            #:track-literals
+            [[{~literal 8<-plan-from-here} . _] (finish)])
+          (syntax-parse (datum first)
+            [[{~literal 8<-plan-from-here} . _] (finish)]))])))
 
 (define-values (-read -read-syntax -get-info)
   (make-meta-reader
