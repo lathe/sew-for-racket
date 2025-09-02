@@ -15,11 +15,15 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        racket-variant: ["BC", "CS"]
+        racket-variant: ["CS"]
         racket-version: ["8.3", "stable", "current"]
         racket-catalogs-id: ["pkgs"]
         racket-catalogs: [""]
         include:
+          - racket-variant: "BC"
+            racket-version: "8.3"
+            racket-catalogs-id: "pkgs"
+            racket-catalogs: ""
           # We build once against racksnaps (https://racksnaps.defn.io/)
           # so that it's easier to track down working dependency
           # versions. This is essentially our package-lock.json or
