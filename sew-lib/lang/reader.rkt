@@ -20,18 +20,20 @@
 ;   language governing permissions and limitations under the License.
 
 
-(require #/for-syntax #/only-in syntax/parse expr)
+(require #/for-syntax racket/base)
+(require #/for-syntax #/only-in syntax/parse expr this-syntax)
+
+(require #/for-syntax sew/private/autoptic)
 
 (require #/only-in syntax/datum datum)
 (require #/only-in syntax/module-reader
   make-meta-reader lang-reader-module-paths)
 (require #/only-in syntax/parse
-  ~literal ~not ~var attribute define-syntax-class expr id pattern syntax-parse)
+  ~literal ~not ~var attribute define-syntax-class expr id pattern syntax-parse this-syntax)
+(require #/only-in syntax/parse/define define-syntax-parse-rule)
 
-(require #/only-in lathe-comforts define-syntax-parse-rule/autoptic)
-(require #/only-in lathe-comforts/syntax ~autoptic-to ~autoptic-list)
-
-(require #/only-in sew/private sew-sentinel)
+(require sew/private)
+(require sew/private/autoptic)
 
 
 (provide #/rename-out
@@ -40,13 +42,13 @@
   [-get-info get-info])
 
 
-(define-syntax-parse-rule/autoptic (template is-syntax?:expr t)
+(define-syntax-parse-rule (template is-syntax?:expr t)
+  #:when (autoptic-list-to? this-syntax this-syntax)
   (if is-syntax? (syntax t) (datum t)))
 
 (define-syntax-class (directive surrounding-stx)
-  (pattern
-    {~autoptic-to surrounding-stx
-      ({~var _ (directive surrounding-stx)} . _)})
+  (pattern ({~var _ (directive surrounding-stx)} . _)
+    #:when (autoptic-to? surrounding-stx this-syntax))
   (pattern d:id #:when
     (let ()
       (define value-d (attribute d))
@@ -74,9 +76,10 @@
           {~var first (directive orig)}
           rest ...)
         (define (finish)
-          (syntax-parse (template reading-syntax? first) #/
-            {~autoptic-list
-              [_ rest-of-file-pattern:expr preprocess:expr]}
+          (let ([first (template reading-syntax? first)])
+          #/syntax-parse first #/
+            [_ rest-of-file-pattern:expr preprocess:expr]
+            #:when (autoptic-list-to? first first)
             #:with sentinel (datum->syntax #f sew-sentinel)
           #/syntax-parse (template reading-syntax? #/rest ...) #/
             ({~var rest (non-directive orig)} ...)

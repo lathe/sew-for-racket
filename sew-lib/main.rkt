@@ -22,12 +22,10 @@
 (require #/for-syntax racket/base)
 (require #/for-syntax #/only-in racket/match == match)
 (require #/for-syntax #/only-in syntax/parse
-  attribute expr id syntax-parse)
+  ~and attribute expr id syntax-parse)
 
-(require #/for-syntax #/only-in lathe-comforts/syntax
-  ~autoptic ~autoptic-list)
-
-(require #/for-syntax #/only-in sew/private sew-sentinel)
+(require #/for-syntax sew/private)
+(require #/for-syntax sew/private/autoptic)
 
 
 (provide 8<-plan-from-here)
@@ -36,11 +34,13 @@
 (define-syntax (8<-plan-from-here stx)
   (syntax-parse stx
     [
-      {~autoptic-list
-        (_ {~autoptic #:private-interface:sew} sentinel
-          rest-of-file-pattern
-          preprocess:expr
-          rest ...)}
+      (_ {~and kw #:private-interface:sew} sentinel
+        rest-of-file-pattern
+        preprocess:expr
+        rest ...)
+      
+      #:when (autoptic-to? stx #'kw)
+      #:when (autoptic-list-to? stx stx)
       
       #:when
       (equal-always? sew-sentinel (syntax-e #/attribute sentinel))
@@ -50,7 +50,7 @@
             (syntax-parse #'(rest ...) #/ rest-of-file-pattern
               preprocess))
           (8<-plan-from-here-helper))]
-    [_
-      (syntax-parse stx #/
-        {~autoptic-list (_ rest-of-file-pattern preprocess:expr)}
+    [ _
+      (syntax-parse stx #/ (_ rest-of-file-pattern preprocess:expr)
+        #:when (autoptic-list-to? stx stx)
       #/raise-syntax-error #f "use of a Sew directive outside of a `#lang sew` module" stx)]))
