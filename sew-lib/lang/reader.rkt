@@ -5,7 +5,7 @@
 ; A Racket meta-language for assembling a file with custom
 ; preprocessing logic.
 
-;   Copyright 2021, 2022 2025 The Lathe Authors
+;   Copyright 2021, 2022, 2025 The Lathe Authors
 ;
 ;   Licensed under the Apache License, Version 2.0 (the "License");
 ;   you may not use this file except in compliance with the License.
@@ -49,7 +49,9 @@
 (define-syntax-class (directive surrounding-stx)
   (pattern ({~var _ (directive surrounding-stx)} . _)
     #:when (autoptic-to? surrounding-stx this-syntax))
-  (pattern d:id #:when
+  (pattern d:id
+    #:when (autoptic-to? surrounding-stx this-syntax)
+    #:when
     (let ()
       (define value-d (attribute d))
       (define unwrapped-d
