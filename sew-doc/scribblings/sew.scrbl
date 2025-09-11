@@ -20,7 +20,13 @@
 @;   language governing permissions and limitations under the License.
 
 
+@(require #/for-syntax racket/base)
+@(require #/for-syntax #/only-in syntax/parse expr id this-syntax)
+
+@(require #/for-syntax sew/private/autoptic)
+
 @(require #/only-in racket/match match-define)
+@(require #/only-in syntax/parse/define define-syntax-parse-rule)
 
 
 @(require #/for-label #/only-in racket/base
@@ -47,13 +53,16 @@
 @(define (make-id sym)
    (datum->syntax #f (printable (symbol->string sym))))
 
-@(define-syntax-rule @lang[x]
+@(define-syntax-parse-rule @lang[x:expr]
+   #:when (autoptic-list-to? this-syntax this-syntax)
    @racketmetafont{@hash-lang[] @x})
 
-@(define-syntax-rule @lang-mod[x]
+@(define-syntax-parse-rule @lang-mod[x:id]
+   #:when (autoptic-list-to? this-syntax this-syntax)
    @lang[@racketmodname[x]])
 
-@(define-syntax-rule @lang-racket-base[]
+@(define-syntax-parse-rule @lang-racket-base[]
+   #:when (autoptic-list-to? this-syntax this-syntax)
    @lang-mod[racket/base])
 
 @(define @mod-sew[]
@@ -68,7 +77,8 @@
 @(define @lang-sew-built[]
    @lang[@mod-sew-built[]])
 
-@(define-syntax-rule (directiveref directive-name)
+@(define-syntax-parse-rule @directiveref[directive-name:id]
+   #:when (autoptic-list-to? this-syntax this-syntax)
    @elemref[
     '(sew-built-directive directive-name)
    ]{@racketfont{@(symbol->string 'directive-name)}})
